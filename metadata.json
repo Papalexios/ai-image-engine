@@ -1,0 +1,5 @@
+{
+  "name": "AI Image Engine for WordPress",
+  "description": "A tool to connect to a WordPress site, crawl posts, and use AI to automatically generate and assign featured images and alt text for posts that are missing them.",
+  "requestFramePermissions": []
+}

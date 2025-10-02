@@ -1,0 +1,110 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI Image Engine for WordPress</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      :root {
+        --color-brand-primary: #0ea5e9;
+        --color-brand-secondary: #38bdf8;
+        --color-brand-accent: #7dd3fc;
+        --color-background: #f1f5f9; /* slate-100 */
+        --color-surface: #ffffff; /* white */
+        --color-surface-muted: #f8fafc; /* slate-50 */
+        --color-muted: #94a3b8; /* slate-400 */
+        --color-subtle: #cbd5e1; /* slate-300 */
+        --color-text-primary: #0f172a; /* slate-900 */
+        --color-text-secondary: #475569; /* slate-600 */
+        --color-border: #e2e8f0; /* slate-200 */
+        --color-special-start: #38bdf8; /* sky-500 */
+        --color-special-end: #6366f1; /* indigo-500 */
+      }
+      html.dark {
+        --color-brand-primary: #0ea5e9;
+        --color-brand-secondary: #38bdf8;
+        --color-brand-accent: #7dd3fc;
+        --color-background: #1e293b; /* slate-800 */
+        --color-surface: #334155; /* slate-700 */
+        --color-surface-muted: #475569; /* slate-600 */
+        --color-muted: #64748b; /* slate-500 */
+        --color-subtle: #94a3b8; /* slate-400 */
+        --color-text-primary: #f1f5f9; /* slate-100 */
+        --color-text-secondary: #cbd5e1; /* slate-300 */
+        --color-border: #475569; /* slate-600 */
+        --color-special-start: #38bdf8;
+        --color-special-end: #818cf8;
+      }
+      @keyframes fade-in {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in {
+        animation: fade-in 0.5s ease-out forwards;
+      }
+      @keyframes subtle-pulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.4); }
+        70% { box-shadow: 0 0 0 8px rgba(56, 189, 248, 0); }
+      }
+      .animate-subtle-pulse {
+        animation: subtle-pulse 2.5s infinite;
+      }
+    </style>
+    <script>
+      // Set theme on initial load to prevent flashing
+      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              'brand': {
+                'primary': 'var(--color-brand-primary)',
+                'secondary': 'var(--color-brand-secondary)',
+                'accent': 'var(--color-brand-accent)',
+              },
+              'background': 'var(--color-background)',
+              'surface': 'var(--color-surface)',
+              'surface-muted': 'var(--color-surface-muted)',
+              'muted': 'var(--color-muted)',
+              'subtle': 'var(--color-subtle)',
+              'text-primary': 'var(--color-text-primary)',
+              'text-secondary': 'var(--color-text-secondary)',
+              'border': 'var(--color-border)',
+              'special': {
+                'start': 'var(--color-special-start)',
+                'end': 'var(--color-special-end)',
+              }
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "@google/genai": "https://esm.sh/@google/genai",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "path": "https://aistudiocdn.com/path@^0.12.7",
+    "vite": "https://aistudiocdn.com/vite@^7.1.8",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.0.4"
+  }
+}
+</script>
+</head>
+  <body class="bg-background text-text-primary antialiased transition-colors duration-300">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
