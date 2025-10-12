@@ -1,13 +1,13 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { AIProvider, AnalysisAIConfig, ImageSettings, TextAIProvider, WordPressPost } from '../types';
+import { AIProvider, AnalysisAIConfig, Configuration, ImageAIConfig, ImageSettings, TextAIProvider, WordPressPost, AspectRatio } from '../types';
 
 // --- Real AI Service using Google Gemini API ---
 
-const getGeminiClient = () => {
-  if (!process.env.API_KEY) {
-    throw new Error("Google Gemini API Key is not configured in the environment.");
+const getGeminiClient = (apiKey?: string) => {
+  if (!apiKey) {
+    throw new Error("Google Gemini API Key is missing. Please provide it in the configuration.");
   }
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey });
 };
 
 const stripHtml = (html: string) => {
@@ -191,12 +191,12 @@ const callOpenAICompatibleAPI = async (
 /**
  * Generic text generation function that routes to the correct provider.
  */
-const generateText = async (analysisConfig: AnalysisAIConfig, prompt: string, maxTokens?: number, timeout?: number): Promise<string> => {
+export const generateText = async (analysisConfig: AnalysisAIConfig, prompt: string, maxTokens?: number, timeout?: number): Promise<string> => {
     const { provider, apiKey, model } = analysisConfig;
 
     switch (provider) {
         case TextAIProvider.Gemini:
-            const ai = getGeminiClient();
+            const ai = getGeminiClient(apiKey);
             // Note: maxTokens is not easily mapped to Gemini's config and is ignored here for simplicity.
             // The primary bug was with OpenAI-compatible APIs.
             const response = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: prompt });
@@ -230,7 +230,7 @@ const generateJsonText = async (analysisConfig: AnalysisAIConfig, prompt: string
     const { provider } = analysisConfig;
 
     if (provider === TextAIProvider.Gemini) {
-        const ai = getGeminiClient();
+        const ai = getGeminiClient(analysisConfig.apiKey);
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: prompt,
@@ -320,33 +320,130 @@ export const generateImageBriefsAndAltsBatch = async (
   return allResults;
 };
 
+const callOpenAICompatibleImageAPI = async (
+    apiUrl: string,
+    apiKey: string,
+    model: string,
+    prompt: string,
+    aspectRatio: AspectRatio
+): Promise<string> => {
+    const sizeMap: Record<AspectRatio, string> = {
+        [AspectRatio.Square]: '1024x1024',
+        [AspectRatio.Landscape]: '1792x1024',
+        [AspectRatio.Portrait]: '1024x1792',
+    };
+
+    const response = await fetchWithTimeout(apiUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            model: model,
+            prompt: prompt,
+            n: 1,
+            size: sizeMap[aspectRatio],
+            response_format: 'b64_json',
+        }),
+    }, 120000); // 2 minute timeout for image generation
+
+    if (!response.ok) {
+        const errorBody = await response.text();
+        console.error(`OpenAI-compatible Image API Error (${response.status}):`, errorBody);
+        throw new FetchError(`Image API request failed with status ${response.status}`, response.status);
+    }
+    const data = await response.json();
+    if (!data.data || !data.data[0] || !data.data[0].b64_json) {
+        throw new Error("Invalid response from image generation API.");
+    }
+    return `data:image/png;base64,${data.data[0].b64_json}`;
+};
+
+const callStabilityImageAPI = async (
+    apiKey: string,
+    model: string,
+    prompt: string,
+    aspectRatio: AspectRatio
+): Promise<string> => {
+    const response = await fetchWithTimeout(`https://api.stability.ai/v1/generation/${model}/text-to-image`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+            text_prompts: [{ text: prompt }],
+            cfg_scale: 7,
+            samples: 1,
+            steps: 30,
+            aspect_ratio: aspectRatio,
+        }),
+    }, 120000);
+
+    if (!response.ok) {
+        const errorBody = await response.text();
+        console.error(`Stability API Error (${response.status}):`, errorBody);
+        throw new FetchError(`Image API request failed with status ${response.status}`, response.status);
+    }
+
+    const data = await response.json();
+    if (!data.artifacts || !data.artifacts[0] || !data.artifacts[0].base64) {
+        throw new Error("Invalid response from Stability API.");
+    }
+    return `data:image/png;base64,${data.artifacts[0].base64}`;
+};
+
+
 export const generateImage = async (
-  provider: AIProvider,
+  imageConfig: ImageAIConfig,
   prompt: string,
   settings: ImageSettings
 ): Promise<string> => {
-  console.log(`Generating image with ${provider} for prompt: ${prompt}`);
+  console.log(`Generating image with ${imageConfig.provider} for prompt: ${prompt}`);
+  const { provider, apiKey, model } = imageConfig;
   
-  if (provider === AIProvider.Gemini) {
-      const ai = getGeminiClient();
-      const response = await retryableAIOperation<{ generatedImages: { image: { imageBytes: string } }[] }>(() => ai.models.generateImages({
-          model: 'imagen-4.0-generate-001',
-          prompt: prompt,
-          config: {
-              numberOfImages: 1,
-              aspectRatio: settings.aspectRatio,
-          },
-      }));
-      const base64ImageBytes = response.generatedImages[0].image.imageBytes;
-      return `data:image/png;base64,${base64ImageBytes}`;
-  } 
-  else if (provider === AIProvider.Pollinations) {
-      const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}`;
-      return await fetchImageAsBase64(imageUrl);
+  if (!apiKey && provider !== AIProvider.Pollinations) {
+    throw new Error(`API Key for ${provider} is required.`);
   }
-  else {
-      throw new Error(`${provider} is not implemented in this version.`);
-  }
+
+  const operation = async () => {
+    switch (provider) {
+      case AIProvider.Gemini:
+          const ai = getGeminiClient(apiKey);
+          const response = await ai.models.generateImages({
+              model: 'imagen-4.0-generate-001',
+              prompt: prompt,
+              config: {
+                  numberOfImages: 1,
+                  aspectRatio: settings.aspectRatio,
+              },
+          });
+          const base64ImageBytes = response.generatedImages[0].image.imageBytes;
+          return `data:image/png;base64,${base64ImageBytes}`;
+
+      case AIProvider.DallE3:
+          return callOpenAICompatibleImageAPI('https://api.openai.com/v1/images/generations', apiKey!, 'dall-e-3', prompt, settings.aspectRatio);
+
+      case AIProvider.OpenRouter:
+          if (!model) throw new Error("A model name is required for OpenRouter image generation.");
+          return callOpenAICompatibleImageAPI('https://openrouter.ai/api/v1/images/generations', apiKey!, model, prompt, settings.aspectRatio);
+
+      case AIProvider.Stability:
+          if (!model) throw new Error("A model name (engine ID) is required for Stability AI.");
+          return callStabilityImageAPI(apiKey!, model, prompt, settings.aspectRatio);
+
+      case AIProvider.Pollinations:
+          const imageUrl = `https://pollinations.ai/p/${encodeURIComponent(prompt)}`;
+          return await fetchImageAsBase64(imageUrl);
+
+      default:
+          throw new Error(`${provider} is not implemented in this version.`);
+    }
+  };
+
+  return await retryableAIOperation(operation);
 };
 
 /**
@@ -446,9 +543,9 @@ Respond with ONLY the paragraph number and nothing else.`;
     }
 };
 
-export const analyzeImageWithVision = async (imageUrl: string): Promise<{ score: number; altText: string; brief: string; }> => {
+export const analyzeImageWithVision = async (geminiApiKey: string, imageUrl: string): Promise<{ score: number; altText: string; brief: string; }> => {
     console.log(`Analyzing image with AI Vision: ${imageUrl}`);
-    const ai = getGeminiClient();
+    const ai = getGeminiClient(geminiApiKey);
 
     const base64ImageData = await fetchImageAsBase64(imageUrl);
     const mimeType = base64ImageData.substring(base64ImageData.indexOf(":") + 1, base64ImageData.indexOf(";"));
@@ -488,5 +585,80 @@ export const analyzeImageWithVision = async (imageUrl: string): Promise<{ score:
     } catch (e) {
       console.error("Failed to parse Gemini JSON response for vision analysis:", response.text);
       throw new Error("AI failed to generate valid analysis data.");
+    }
+};
+
+/**
+ * Translates a technical error from an AI provider into a more user-friendly message.
+ */
+const getFriendlyAIError = (error: unknown, provider: string): string => {
+    let message = error instanceof Error ? error.message : 'An unknown error occurred.';
+    if (message.includes('401') || message.toLowerCase().includes('api key') || message.toLowerCase().includes('authentication')) {
+        message = `Authentication failed for ${provider}. Please check your API Key.`;
+    } else if (message.includes('404')) {
+        message = `Model not found for ${provider}. Please check the model name.`;
+    } else if (message.includes('429') || message.includes('RESOURCE_EXHAUSTED')) {
+        message = `API rate limit exceeded for ${provider}. Please wait and try again.`;
+    } else if (message.includes('timed out')) {
+        message = `The request to ${provider} timed out. The service may be unavailable.`;
+    }
+    return message;
+};
+
+
+/**
+ * Performs a lightweight test of a given text AI provider configuration.
+ */
+export const testTextAIProvider = async (config: AnalysisAIConfig): Promise<{ success: boolean, message: string }> => {
+    try {
+        if (!config.apiKey) throw new Error("API Key is required.");
+        const testPrompt = "This is a connection test.";
+        // generateText handles routing to Gemini, OpenAI, etc., and will throw on failure
+        await generateText(config, testPrompt, 5, 20000); // 20 second timeout
+        return { success: true, message: 'Connection successful.' };
+    } catch (error) {
+        return { success: false, message: getFriendlyAIError(error, config.provider) };
+    }
+};
+
+/**
+ * Performs a lightweight test of an image AI provider by checking credentials.
+ */
+export const testImageAIProvider = async (config: ImageAIConfig): Promise<{ success: boolean, message: string }> => {
+    const { provider, apiKey, model } = config;
+    try {
+        if (!apiKey) throw new Error("API Key is required.");
+        let testUrl: string;
+        let options: RequestInit = {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+        };
+
+        switch (provider) {
+            case AIProvider.Gemini:
+                // Gemini doesn't have a simple auth test endpoint, so we do a cheap text generation.
+                return testTextAIProvider({ provider: TextAIProvider.Gemini, apiKey });
+            case AIProvider.DallE3:
+                testUrl = 'https://api.openai.com/v1/models';
+                break;
+            case AIProvider.OpenRouter:
+                testUrl = 'https://openrouter.ai/api/v1/models';
+                break;
+            case AIProvider.Stability:
+                testUrl = 'https://api.stability.ai/v1/user/balance';
+                break;
+            default:
+                return { success: true, message: 'No test required.' };
+        }
+        
+        const response = await fetchWithTimeout(testUrl, options, 20000); // 20s timeout
+        if (!response.ok) {
+            throw new FetchError(`API test failed with status ${response.status}`, response.status);
+        }
+
+        return { success: true, message: 'Connection successful.' };
+
+    } catch (error) {
+        return { success: false, message: getFriendlyAIError(error, provider) };
     }
 };

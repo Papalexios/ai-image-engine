@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { WordPressPost, Configuration } from '../types';
+import { WordPressPost, Configuration, AIProvider, TextAIProvider } from '../types';
 import { analyzeImageWithVision } from '../services/aiService';
 import { updateMediaAltText } from '../services/wordpressService';
 import { XIcon, Loader, CheckCircle2, AlertTriangle, SparklesIcon } from './icons/Icons';
@@ -28,15 +27,31 @@ const AnalysisModal: React.FC<Props> = ({ post, config, onClose, onUpdatePost, o
 
   useEffect(() => {
     const performAnalysis = async () => {
+      // Find the Gemini API key from the configuration, regardless of which service it's configured for.
+      const geminiApiKey = config.ai.image.provider === AIProvider.Gemini 
+          ? config.ai.image.apiKey 
+          : config.ai.analysis.apiKey;
+          
       if (!post.existingImageUrl) {
         setError("No existing image URL found for analysis.");
         setIsLoading(false);
         return;
       }
+      if (config.ai.image.provider !== AIProvider.Gemini && config.ai.analysis.provider !== TextAIProvider.Gemini) {
+          setError("Google Gemini must be selected as an Image or Analysis provider to use AI Vision.");
+          setIsLoading(false);
+          return;
+      }
+      if (!geminiApiKey) {
+        setError("A Google Gemini API key is required for Vision Analysis, but it is not configured.");
+        setIsLoading(false);
+        return;
+      }
+
       try {
         setIsLoading(true);
         onUpdatePost(post.id, { status: 'analyzing', statusMessage: 'Analyzing existing image...' });
-        const result = await analyzeImageWithVision(post.existingImageUrl);
+        const result = await analyzeImageWithVision(geminiApiKey, post.existingImageUrl);
         setAnalysis(result);
         onUpdatePost(post.id, { status: 'analysis_success', statusMessage: `Analysis complete. Score: ${result.score}/10`, analysis: result });
       } catch (e) {
@@ -49,7 +64,7 @@ const AnalysisModal: React.FC<Props> = ({ post, config, onClose, onUpdatePost, o
     };
     performAnalysis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post.id, post.existingImageUrl, onUpdatePost]);
+  }, [post.id, post.existingImageUrl, onUpdatePost, config]);
 
   const handleApplyAltText = async () => {
     if (!analysis || !post.featured_media) return;

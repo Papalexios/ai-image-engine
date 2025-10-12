@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { AppState, Configuration, CrawlProgress, WordPressPost } from './types';
+import { AppState, Configuration, CrawlProgress, WordPressPost, AIProvider, TextAIProvider } from './types';
 import ConfigurationStep from './components/ConfigurationStep';
 import CrawlingStep from './components/CrawlingStep';
 import ResultsStep from './components/ResultsStep';

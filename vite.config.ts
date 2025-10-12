@@ -10,9 +10,6 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
       },
       plugins: [react()],
-      define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-      },
       resolve: {
         alias: {
           // FIX: `__dirname` is not available in ES modules. Using `path.resolve('.')` to get the project root.

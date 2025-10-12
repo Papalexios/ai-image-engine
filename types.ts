@@ -1,4 +1,5 @@
 
+
 export enum AppState {
   Configuration,
   Crawling,
@@ -47,6 +48,12 @@ export interface ImageSettings {
   negativePrompt: string;
 }
 
+export interface ImageAIConfig {
+  provider: AIProvider;
+  apiKey?: string;
+  model?: string;
+}
+
 // New: Configuration for the content analysis AI
 export interface AnalysisAIConfig {
   provider: TextAIProvider;
@@ -57,8 +64,8 @@ export interface AnalysisAIConfig {
 export interface Configuration {
   wordpress: WordPressCredentials;
   ai: {
-    provider: AIProvider;
-    analysis: AnalysisAIConfig; // New: Added analysis provider config
+    image: ImageAIConfig;
+    analysis: AnalysisAIConfig;
   };
   image: ImageSettings;
 }

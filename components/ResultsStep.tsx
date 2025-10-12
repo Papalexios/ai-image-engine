@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { WordPressPost, Configuration } from '../types';
+import { WordPressPost, Configuration, AIProvider, TextAIProvider } from '../types';
 import PostCard from './PostCard';
 import { generateImageBriefsAndAltsBatch, generateImage, getContentWithImagePlaceholder } from '../services/aiService';
 import { uploadImage, updatePost, updateMediaAltText } from '../services/wordpressService';
@@ -68,7 +68,7 @@ const ResultsStep: React.FC<Props> = ({ initialPosts, config, onReset }) => {
         const fullPrompt = `${briefData.brief}, ${config.image.style}, ${config.image.negativePrompt ? `avoiding ${config.image.negativePrompt}` : ''}`;
         
         updatePostState(post.id, { status: 'generating_image', statusMessage: 'Creating image...' });
-        const imageDataUrl = await generateImage(config.ai.provider, fullPrompt, config.image);
+        const imageDataUrl = await generateImage(config.ai.image, fullPrompt, config.image);
         
         updatePostState(post.id, { status: 'uploading', statusMessage: 'Uploading to WordPress...' });
         const uploadedImage = await uploadImage(config.wordpress, imageDataUrl, `ai-img-${post.id}.png`, briefData.altText, briefData.altText);
