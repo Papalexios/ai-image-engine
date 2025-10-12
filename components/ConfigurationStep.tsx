@@ -1,5 +1,4 @@
-import React, 'react';
-import { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Configuration, AIProvider, ImageFormat, AspectRatio, TextAIProvider, AnalysisAIConfig, ImageAIConfig } from '../types';
 import { EyeIcon, EyeOffIcon, InfoIcon, ZapIcon, Loader, AlertTriangle, CheckCircle2 } from './icons/Icons';
 import { getTotalPosts } from '../services/wordpressService';
@@ -13,14 +12,13 @@ type TestResult = { success: boolean; message: string };
 type TestResults = Record<string, TestResult>;
 
 // Maps providers to a single key holder (e.g., DALL-E 3 and OpenAI GPT use the same 'OpenAI' key)
+// FIX: Removed duplicate keys from object literal. Enums `AIProvider.Gemini` and `TextAIProvider.Gemini` have the same value, as do `AIProvider.OpenRouter` and `TextAIProvider.OpenRouter`, causing duplicate property errors.
 const KEY_HOLDER_MAP: Record<string, string> = {
     [AIProvider.Gemini]: 'Google Gemini',
-    [TextAIProvider.Gemini]: 'Google Gemini',
     [AIProvider.DallE3]: 'OpenAI',
     [TextAIProvider.OpenAI]: 'OpenAI',
     [AIProvider.Stability]: 'Stability AI',
     [AIProvider.OpenRouter]: 'OpenRouter',
-    [TextAIProvider.OpenRouter]: 'OpenRouter',
     [TextAIProvider.Groq]: 'Groq',
 };
 
